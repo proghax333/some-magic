@@ -67,15 +67,14 @@ const withStrokeStyle = ctx => value =>
 const withFillStyle = ctx => value =>
     withCanvasProp (ctx) ("fillStyle") (value)
 
-const withResettingStrokeStyle = ctx => value => {
+const withResettingStrokeStyle = ctx => value => fn => (...args) => {
     const oldStrokeStyle = ctx["strokeStyle"];
-    return withStrokeStyle (ctx) (value) (fn => {
-        return (...args) => {
-            const result = fn(...args)
-            withStrokeStyle (ctx) (oldStrokeStyle) (null)
-            return result;
-        }
-    })
+    const result = withStrokeStyle (ctx) (value) (fn) (...args)
+
+    /* Reset strokeStyle to old saved strokeStyle */
+    withStrokeStyle (ctx) (oldStrokeStyle) (() => {}) ()
+
+    return result;
 }
 
 const withContext = canvas => fn =>
@@ -123,13 +122,7 @@ async function loadAndPredict() {
 
     correspondingBodyPixel = Array.from(frontBodySegmentation.data);
 
-    // console.log(frontBodySegmentation)
-    const { width: widthFront, height: heightFront } =
-        frontBodySegmentation;
-
     let line = -1;
-
-    let [w, h] = [widthFront, heightFront]
 
     /* Parts related data */
     const parts = {};
@@ -141,14 +134,15 @@ async function loadAndPredict() {
 
     const generateGrid = bodySegmentation => type => parts => {
         parts[type] = {};
-
+        const { width: w, height: h } = bodySegmentation;
+        
         for(let i = -1; i <= 23; ++i) {
             parts[type][i] = {
                 bounds: {
                     bottom: { x: 0, y: 0 },
-                    left: { x: Math.round(w / 2), y: Math.round(h / 2) },
-                    top: { x: Math.round(w / 2), y: h },
-                    right: { x: 0, y: Math.round(h / 2) }
+                    left:   { x: w, y: 0 },
+                    top:    { x: 0, y: h },
+                    right:  { x: 0, y: 0 }
                 },
                 points: []
             }
@@ -158,7 +152,7 @@ async function loadAndPredict() {
         line = -1;
         
         return bodySegmentation.data.reduce((acc, value, index) => {
-            xMod = index % widthFront;
+            xMod = index % w;
             if(xMod === 0) {
                 ++line;
                 acc.push([]);
