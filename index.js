@@ -282,12 +282,10 @@ async function loadAndPredict() {
     
     /* array generator utility */
     const range = begin => function *(end) {
-        for( ; begin < end; ++begin)
-            yield begin
-        return;
+        for( ; begin < end; ++begin) yield begin
     }
 
-    const rangeInclusive = begin => function (end) {
+    const rangeInclusive = begin => end => {
         return range(begin) (end + 1);
     };
 
@@ -300,7 +298,7 @@ async function loadAndPredict() {
         return withResettingStrokeStyle
             (ctx)
             ('#33333399')
-            ( () => drawRect (pointA) (pointB) (ctx) )
+            ( () => drawRect  (pointA) (pointB) (ctx) )
             ()
     }
 
@@ -310,21 +308,7 @@ async function loadAndPredict() {
         [(right.x - left.x), (bottom.y - top.y)]
     ])
 
-    /* FRONT POSE INFO */
-
-    /* Draw circles at key points of front view */
-    const drawKeypointFront =
-        withContext (canvas1) (drawKeypoint)
-    const drawRectFront =
-        withContext (canvas1) (drawRectOnCanvas)
-    
-    const frontPose = frontBodySegmentation.allPoses[0].keypoints;
-    for(const prop of frontPose) {
-        const { position: { x, y } } = prop;
-        drawKeypointFront([ x, y ]);
-    }
-
-    const renderPart = part => renderer => {
+    const renderBounds = part => renderer => {
         if(part && part.points.length) {
             const { bounds } = part;
             const [ pointA, pointB ] = getPointsFromBounds(bounds)
@@ -333,10 +317,37 @@ async function loadAndPredict() {
             renderer  (pointA) (pointB);
         }
     }
+
+    const renderAllKeypoints = bodySegmentation => renderer => {
+        const pose = bodySegmentation.allPoses[0].keypoints;
+        for(const point of pose) {
+            const { position: { x, y } } = point;
+            renderer([ x, y ]);
+        }
+    }
+
+    const renderAllBounds = parts => type => renderer =>
+        [ ... rangeInclusive  (0) (23) ].forEach(i => {
+            renderBounds (parts[type][i]) (renderer);
+        })
+
+    /* FRONT POSE INFO */
+
+    /* Draw circles at key points of front view */
+    const drawKeypointFront =
+        withContext (canvas1) (drawKeypoint)
+    const drawRectFront =
+        withContext (canvas1) (drawRectOnCanvas)
+    const renderAllBoundsFront = () =>
+        renderAllBounds (parts) (FRONT) (drawRectFront)
+    const renderAllKeypointsFront = () =>
+        renderAllKeypoints (frontBodySegmentation) (drawKeypointFront)
+
+    // Draw all keypoints
+    renderAllKeypointsFront()
+    
     // Draw rectangle bounds
-    [ ... rangeInclusive  (0) (23) ].forEach(i => {
-        renderPart (parts[FRONT][i]) (drawRectFront);
-    })
+    renderAllBoundsFront();
 
     /* SIDE POSE INFO */
 
@@ -345,16 +356,21 @@ async function loadAndPredict() {
         withContext (canvas2) (drawKeypoint)
     const drawRectSide =
         withContext (canvas2) (drawRectOnCanvas)
+    const renderAllBoundsSide = () =>
+        renderAllBounds (parts) (SIDE) (drawRectSide)
+    const renderAllKeypointSide = () =>
+        renderAllKeypoints (sideBodySegmentation) (drawKeypointSide)
 
     const sidePose = sideBodySegmentation.allPoses[0].keypoints;
     for(const prop of sidePose) {
         const { position: { x, y } } = prop;
         drawKeypointSide([x, y])
     }
+    // Draw all keypoints
+    renderAllKeypointSide()
+
     // Draw rectangle bounds
-    [ ... rangeInclusive (0) (23) ].forEach(i => {
-        renderPart (parts[SIDE][i]) (drawRectSide);
-    })
+    renderAllBoundsSide()
 }
 
 loadAndPredict();
